@@ -3,9 +3,9 @@
 </style></head><body><header><div style="max-width:950px;margin:auto"><h1>🧬 BioChem <span style="color:#71cde1">Library</span></h1><small>Biologie + Chimie • Gratuit • Datele tale, pe dispozitivul tău</small><nav id="nav"></nav></div></header><main class="wrap"><div id="status" role="status"></div><div id="app"></div></main><footer>Fără abonament • Fără cheie API • Salvează periodic o copie de rezervă</footer>
 <script>
 window.addEventListener('error',function(e){
- const st=document.getElementById('status'),app=document.getElementById('app');
- if(st)st.textContent='Eroare JavaScript: '+(e.message||'necunoscută');
- if(app&&!app.textContent.trim())app.innerHTML='<section class="panel"><h2>Aplicația nu a pornit</h2><p>Codul are o eroare JavaScript. Datele locale nu au fost șterse.</p><p class="muted">Verifică dacă ai copiat codul complet, fără întreruperi introduse de PDF.</p></section>';
+const st=document.getElementById('status'),app=document.getElementById('app');
+if(st)st.textContent='Eroare JavaScript: '+(e.message||'necunoscută');
+if(app&&!app.textContent.trim())app.innerHTML='<section class="panel"><h2>Aplicația nu a pornit</h2><p>Codul are o eroare JavaScript. Datele locale nu au fost șterse.</p><p class="muted">Verifică dacă ai copiat codul complet, fără întreruperi introduse de PDF.</p></section>';
 });
 window.addEventListener('unhandledrejection',function(e){console.error('BioChem:',e.reason)});
 </script>
@@ -25,7 +25,7 @@ async function ocr(canvas){if(!window.Tesseract){msg('Se încarcă motorul OCR g
 async function runSearch(sem){query=$('#q').value.trim();if(!query)return msg('Scrie o întrebare sau un concept.');searchScope=$('#searchScope').value;let parts=filtered().filter(d=>searchScope==='all'||docType(d)===searchScope).flatMap(d=>chunks(d).map(p=>({...p,kind:docType(d)})));if(!parts.length)return msg('Nu există materiale pentru filtrul ales. Încearcă Toate materialele.');let lex=parts.map(p=>lexical(query,p.text));let scores=[...lex];if(sem){try{let qv=await vector(query);for(let i=0;i<parts.length;i++){msg(`Căutare semantică ${i+1}/${parts.length}...`);let v=await vector(parts[i].text.slice(0,1000));scores[i]=0.85*dot(qv,v)+0.15*Math.min(1,lex[i]);if(i%5===0)await new Promise(r=>setTimeout(r,0))}msg('Căutare semantică finalizată.')}catch(e){msg('Modelul semantic nu a putut porni. Folosesc căutarea rapidă: '+e.message)}}searchResults=parts.map((p,i)=>({...p,score:scores[i]})).filter(x=>x.score>0.01).sort((a,b)=>b.score-a.score).slice(0,15);render()}
 async function rate(ok){let cc=cards.filter(c=>c.subject===subject),c=cc[cardIndex%cc.length];if(!c)return;await put('cards',{...c,good:(c.good||0)+(ok?1:0),missed:(c.missed||0)+(ok?0:1)});cardIndex++;flip=false;reload()}async function mark(ok){let cc=cards.filter(c=>c.subject===subject),c=cc[cardIndex%cc.length];await put('attempts',{id:uid(),subject,question:c.front,ok,date:Date.now()});cardIndex++;reload()}
 $('#app').addEventListener('click',async e=>{let b=e.target.closest('[data-act]');if(!b)return;let a=b.dataset.act;if(a.startsWith('typeDoc:')){let d=docs.find(x=>x.id===a.slice(8));if(!d)return;let v=prompt('Tip: notebook (caiet), book (carte), test (teste)',docType(d));if(v&&['notebook','book','test'].includes(v.toLowerCase())){d.kind=v.toLowerCase();await put('docs',d);reload()}}else if(a.startsWith('deleteDoc:')){let id=a.slice(10);if(confirm('Ștergi materialul?')){await del('docs',id);reload()}}else if(a.startsWith('editDoc:')){let d=docs.find(x=>x.id===a.slice(8));if(!d)return;let t=prompt('Corectează textul OCR / extras:',d.text);if(t!==null){d.text=t;d.pages=[{number:1,text:t}];await put('docs',d);reload()}}else if(a.startsWith('makeCard:')){let r=searchResults[+a.slice(9)];changeTab('Flashcards');$('#front').value=query;$('#back').value=r.text;msg('Editează întrebarea și răspunsul, apoi salvează flashcardul.')}else if(a.startsWith('togglePlan:')){let p=plans.find(x=>x.id===a.slice(11));p.done=!p.done;await put('plans',p);reload()}else if(a.startsWith('deletePlan:')){await del('plans',a.slice(11));reload()}});
-
+ 
 // CLOUD / OCR / 3D EXTENSION. Supabase anon key is public; RLS protects private rows.
 const CLOUD_CFG='biochem-cloud-config-v1';let cfg={};try{cfg=JSON.parse(localStorage.getItem(CLOUD_CFG)||'{}')||{}}catch(e){console.warn('Configurație cloud invalidă',e)}
 const syncStores=['docs','cards','attempts','plans','review','models','chapters','quizzes','quizAttempts'];const progressOnly=()=>localStorage.getItem('biochem-progress-only')!=='false';const activeSyncStores=()=>progressOnly()?['cards','attempts','plans','chapters','quizzes','quizAttempts']:syncStores;
@@ -35,56 +35,56 @@ function syncView(){return `<h2>Sincronizare Supabase</h2><section class="panel"
 function modelsView(){return `<h2>Modele 3D • ${subject}</h2><section class="panel"><label>Importă model 3D (.glb, .gltf, .obj, .stl)</label><input id="model-file" type="file" accept=".glb,.gltf,.obj,.stl"><label>Titlu</label><input id="model-title" placeholder="Ex.: Molecula de benzen"><label>Descriere / subiect</label><textarea id="model-desc" placeholder="Ex.: structură aromatică, electroni delocalizați"></textarea><button class="primary" data-model="add">Adaugă modelul</button><p class="muted">GLB este cel mai sigur format pe iPad. GLTF cu fișiere externe nu este acceptat. Modelele sunt salvate local și se sincronizează în cloud când ești conectat. Pentru modele mari verifică limita Supabase.</p></section><section class="panel"><h3>Modelele mele</h3>${models.filter(m=>m.subject===subject).map(m=>`<div class="result"><b>${esc(m.title)}</b> <span class="tag">${esc(m.format)}</span><p>${esc(m.description||'')}</p><button class="secondary" data-model="open" data-id="${m.id}">Deschide 3D</button> <button class="secondary" data-model="delete" data-id="${m.id}">Șterge</button></div>`).join('')||'<p>Nu ai importat modele încă.</p>'}<div id="model-display"></div></section>`}
 async function initCloud(){if(!cfg.url||!cfg.key)return;try{const {createClient}=await import('https://esm.sh/@supabase/supabase-js@2');cloudClient=createClient(cfg.url,cfg.key,{auth:{persistSession:true,autoRefreshToken:true}});const {data}=await cloudClient.auth.getUser();cloudUser=data.user||null;cloudClient.auth.onAuthStateChange((_event,session)=>{cloudUser=session?.user||null});}catch(e){notice('Supabase indisponibil: '+e.message)}}
 async function cloudAction(action){try{if(action==='configure'){localStorage.setItem('biochem-progress-only',$('#progressOnly').checked?'true':'false');cfg={url:$('#sburl').value.trim().replace(/\/$/,''),key:$('#sbkey').value.trim()};if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(cfg.url))throw Error('URL Supabase invalid');localStorage.setItem(CLOUD_CFG,JSON.stringify(cfg));cloudClient=null;await initCloud();notice('Configurație salvată.')}else{if(!cloudClient)await initCloud();if(!cloudClient)throw Error('Configurează Supabase întâi');if(action==='signup'||action==='login'){let email=$('#sbemail').value.trim(),password=$('#sbpassword').value;let {data,error}=action==='signup'?await cloudClient.auth.signUp({email,password}):await cloudClient.auth.signInWithPassword({email,password});if(error)throw error;cloudUser=data.user;notice(action==='signup'?'Verifică emailul pentru confirmare, dacă este cerută.':'Conectat.');}if(action==='logout'){await cloudClient.auth.signOut();cloudUser=null;notice('Deconectat.')}if(action==='sync')await syncAll();}render()}catch(e){notice('Cloud: '+e.message)}}
-
+ 
 const BUCKET='study-files';
 async function getAsset(id){return new Promise((resolve,reject)=>{let q=store('assets').get(id);q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error)})}
 async function saveAsset(id,blob,kind,name){await basePut('assets',{id,blob});await basePut('filemeta',{id,kind,name,mime:blob.type||'application/octet-stream',size:blob.size,uploaded:false,created:Date.now()});queueSync()}
 function assetPath(id){return cloudUser.id+'/'+encodeURIComponent(id)}
 async function fetchAsset(id){if(!cloudUser||!cloudClient||!navigator.onLine)return null;let {data,error}=await cloudClient.storage.from(BUCKET).download(assetPath(id));if(error)throw error;await basePut('assets',{id,blob:data});return data}
 async function syncFiles(){
- const local=await all('filemeta');
- for(const meta of local){if(meta.uploaded)continue;let asset=await getAsset(meta.id);if(!asset?.blob)continue;
-  const {error}=await cloudClient.storage.from(BUCKET).upload(assetPath(meta.id),asset.blob,{contentType:meta.mime,upsert:true});if(error)throw error;
-  await basePut('filemeta',{...meta,uploaded:true});
- }
- // Remote manifest allows the second device to discover files without downloading everything at once.
- const {data:remote,error}=await cloudClient.storage.from(BUCKET).list(cloudUser.id,{limit:1000});if(error)throw error;
- for(const file of remote||[]){const id=decodeURIComponent(file.name);if(!local.some(m=>m.id===id))await basePut('filemeta',{id,name:id,uploaded:true,size:file.metadata?.size||0});}
+const local=await all('filemeta');
+for(const meta of local){if(meta.uploaded)continue;let asset=await getAsset(meta.id);if(!asset?.blob)continue;
+ const {error}=await cloudClient.storage.from(BUCKET).upload(assetPath(meta.id),asset.blob,{contentType:meta.mime,upsert:true});if(error)throw error;
+ await basePut('filemeta',{...meta,uploaded:true});
+}
+// Remote manifest allows the second device to discover files without downloading everything at once.
+const {data:remote,error}=await cloudClient.storage.from(BUCKET).list(cloudUser.id,{limit:1000});if(error)throw error;
+for(const file of remote||[]){const id=decodeURIComponent(file.name);if(!local.some(m=>m.id===id))await basePut('filemeta',{id,name:id,uploaded:true,size:file.metadata?.size||0});}
 }
 async function hydrateOriginals(){
- if(tab!=='Revizuire OCR')return;
- for(const img of document.querySelectorAll('img[data-original]')){
-  let id=img.dataset.original;if(!id)continue;
-  let asset=await getAsset(id);
-  if(!asset&&cloudUser){try{await fetchAsset(id);asset=await getAsset(id)}catch(e){notice('Imagine indisponibilă: '+e.message)}}
-  if(asset?.blob&&img.isConnected){let url=URL.createObjectURL(asset.blob);img.src=url;img.onload=()=>URL.revokeObjectURL(url)}
- }
+if(tab!=='Revizuire OCR')return;
+for(const img of document.querySelectorAll('img[data-original]')){
+ let id=img.dataset.original;if(!id)continue;
+ let asset=await getAsset(id);
+ if(!asset&&cloudUser){try{await fetchAsset(id);asset=await getAsset(id)}catch(e){notice('Imagine indisponibilă: '+e.message)}}
+ if(asset?.blob&&img.isConnected){let url=URL.createObjectURL(asset.blob);img.src=url;img.onload=()=>URL.revokeObjectURL(url)}
+}
 }
 async function syncAll(){
- if(syncing||!cloudClient||!cloudUser||!navigator.onLine)return;
- syncing=true;
- try{
-  for(const collection of activeSyncStores()){
-   const local=await all(collection);
-   const {data:remote,error}=await cloudClient.from('study_items').select('id,payload,updated_at').eq('kind',collection);
-   if(error)throw error;
-   const byId=new Map(remote.map(x=>[x.id,x]));
-   for(const item of local){
-    const old=byId.get(item.id),updated=item.updated||item.created||item.date||0;
-    if(!old||updated>new Date(old.updated_at).getTime()+1000){
-     const payload=collection==='review'?{...item,pages:item.pages.map(pg=>({...pg,original:undefined}))}:item;
-     const {error:e}=await cloudClient.from('study_items').upsert({id:item.id,owner_id:cloudUser.id,kind:collection,payload,updated_at:new Date(updated||Date.now()).toISOString()},{onConflict:'owner_id,kind,id'});
-     if(e)throw e;
-    }
-   }
-   for(const row of remote){
-    const current=local.find(x=>x.id===row.id);
-    if(!current||new Date(row.updated_at).getTime()>(current.updated||current.created||current.date||0)+1000)await basePut(collection,row.payload);
+if(syncing||!cloudClient||!cloudUser||!navigator.onLine)return;
+syncing=true;
+try{
+ for(const collection of activeSyncStores()){
+  const local=await all(collection);
+  const {data:remote,error}=await cloudClient.from('study_items').select('id,payload,updated_at').eq('kind',collection);
+  if(error)throw error;
+  const byId=new Map(remote.map(x=>[x.id,x]));
+  for(const item of local){
+   const old=byId.get(item.id),updated=item.updated||item.created||item.date||0;
+   if(!old||updated>new Date(old.updated_at).getTime()+1000){
+    const payload=collection==='review'?{...item,pages:item.pages.map(pg=>({...pg,original:undefined}))}:item;
+    const {error:e}=await cloudClient.from('study_items').upsert({id:item.id,owner_id:cloudUser.id,kind:collection,payload,updated_at:new Date(updated||Date.now()).toISOString()},{onConflict:'owner_id,kind,id'});
+    if(e)throw e;
    }
   }
-  if(!progressOnly())await syncFiles();
-  notice('Sincronizare finalizată: note și fișiere în cloud.');await reload();
- }catch(e){notice('Sincronizare nereușită: '+e.message)}finally{syncing=false}
+  for(const row of remote){
+   const current=local.find(x=>x.id===row.id);
+   if(!current||new Date(row.updated_at).getTime()>(current.updated||current.created||current.date||0)+1000)await basePut(collection,row.payload);
+  }
+ }
+ if(!progressOnly())await syncFiles();
+ notice('Sincronizare finalizată: note și fișiere în cloud.');await reload();
+}catch(e){notice('Sincronizare nereușită: '+e.message)}finally{syncing=false}
 }
 let syncTimer;function queueSync(){if(!cloudUser)return;clearTimeout(syncTimer);syncTimer=setTimeout(()=>syncAll(),1800)}
 // Wrap put to add timestamps for conflict resolution, without rewriting original features.
@@ -93,12 +93,12 @@ async function handleReview(b){let r=review.find(x=>x.id===b.dataset.id),i=Numbe
 async function handleModel(b){try{if(b.dataset.model==='add'){let f=$('#model-file').files[0];if(!f)throw Error('Alege un fișier 3D');let ext=f.name.split('.').pop().toLowerCase();if(!['glb','gltf','obj','stl'].includes(ext))throw Error('Format neacceptat');if(f.size>40*1024*1024)throw Error('Maxim 40 MB/model pentru stocarea locală');let id=uid();await saveAsset(id,f,'model',f.name);await put('models',{id,subject,title:$('#model-title').value.trim()||f.name,description:$('#model-desc').value.trim(),format:ext,created:Date.now()});notice('Model salvat local.');reload()}if(b.dataset.model==='delete'){await del('models',b.dataset.id);await del('assets',b.dataset.id);reload()}if(b.dataset.model==='open'){let m=models.find(x=>x.id===b.dataset.id);let asset=await new Promise((r,j)=>{let q=store('assets').get(m.id);q.onsuccess=()=>r(q.result);q.onerror=()=>j(q.error)});if(!asset){await fetchAsset(m.id);asset=await getAsset(m.id)}if(!asset){notice('Modelul nu a putut fi descărcat din cloud.');return}if(modelUrl)URL.revokeObjectURL(modelUrl);modelUrl=URL.createObjectURL(asset.blob);let box=$('#model-display');box.innerHTML='<p>Se încarcă vizualizatorul...</p>';if(m.format==='glb'||m.format==='gltf'){await import('https://cdn.jsdelivr.net/npm/@google/model-viewer@4.1.0/dist/model-viewer.min.js');box.innerHTML=`<h3>${esc(m.title)}</h3><model-viewer src="${modelUrl}" camera-controls auto-rotate style="display:block;width:100%;height:380px;background:#0a1424;border-radius:14px"></model-viewer>`}else{const THREE=await import('https://esm.sh/three@0.170.0');const loaderModule=await import(m.format==='stl'?'https://esm.sh/three@0.170.0/examples/jsm/loaders/STLLoader.js':'https://esm.sh/three@0.170.0/examples/jsm/loaders/OBJLoader.js');const {OrbitControls}=await import('https://esm.sh/three@0.170.0/examples/jsm/controls/OrbitControls.js');box.innerHTML='<div id="threeview" style="height:380px"></div>';let el=$('#threeview'),scene=new THREE.Scene();scene.background=new THREE.Color('#0b192b');let camera=new THREE.PerspectiveCamera(45,el.clientWidth/380,.01,10000);camera.position.set(3,2,4);let renderer=new THREE.WebGLRenderer({antialias:true});renderer.setSize(el.clientWidth,380);el.appendChild(renderer.domElement);scene.add(new THREE.HemisphereLight(0xffffff,0x667799,3));let loader=m.format==='stl'?new loaderModule.STLLoader():new loaderModule.OBJLoader();let object=await loader.loadAsync(modelUrl);if(m.format==='stl')object=new THREE.Mesh(object,new THREE.MeshStandardMaterial({color:0x72d7ef,roughness:.7,side:THREE.DoubleSide}));scene.add(object);let bb=new THREE.Box3().setFromObject(object),center=bb.getCenter(new THREE.Vector3()),size=bb.getSize(new THREE.Vector3()).length();object.position.sub(center);camera.position.set(size,size*.65,size*1.3);camera.lookAt(0,0,0);let controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;let active=true;let obs=new MutationObserver(()=>{if(!el.isConnected){active=false;renderer.dispose();obs.disconnect()}});obs.observe($('#app'),{childList:true});function frame(){if(!active)return;controls.update();renderer.render(scene,camera);requestAnimationFrame(frame)}frame()}}}catch(e){notice('Model 3D: '+e.message)}}
 $('#app').addEventListener('click',e=>{let b=e.target.closest('[data-review],[data-cloud],[data-model]');if(!b)return;if(b.dataset.review)handleReview(b);if(b.dataset.cloud)cloudAction(b.dataset.cloud);if(b.dataset.model)handleModel(b)});
 window.addEventListener('online',()=>syncAll());document.addEventListener('visibilitychange',()=>{if(!document.hidden)syncAll()});initCloud().then(()=>syncAll());
-
-
+ 
+ 
 // CHAPTERS AND MULTIPLE-CHOICE QUIZZES (offline-first, syncable metadata)
 const chapterHints={
- 'Chimie':{'Alcani':['alcan','metan','etan','propan'],'Alchene':['alchen','eten','propen','dubla legatura'],'Alchine':['alchin','etin','tripla legatura'],'Arene':['benzen','aren','aromatic','toluen','nitrare','sulfonare'],'Alcooli':['alcool','etanol','hidroxil'],'Acizi carboxilici':['carboxil','acid acetic','esterificare'],'Izomerie':['izomer','cis','trans','chiral','optic'],'Derivați halogenați':['halogen','clorura','bromura','hidroliza']},
- 'Biologie':{'Celula':['celula','organit','mitocondrie','membrana'],'Genetică':['adn','arn','gena','cromozom','ereditate'],'Țesuturi':['tesut','epitelial','conjunctiv'],'Sistemul nervos':['neuron','sinapsa','nervos'],'Circulație':['inima','sange','artera','vena'],'Respirație':['plaman','alveola','respiratie'],'Digestie':['digestie','stomac','intestin']}
+'Chimie':{'Alcani':['alcan','metan','etan','propan'],'Alchene':['alchen','eten','propen','dubla legatura'],'Alchine':['alchin','etin','tripla legatura'],'Arene':['benzen','aren','aromatic','toluen','nitrare','sulfonare'],'Alcooli':['alcool','etanol','hidroxil'],'Acizi carboxilici':['carboxil','acid acetic','esterificare'],'Izomerie':['izomer','cis','trans','chiral','optic'],'Derivați halogenați':['halogen','clorura','bromura','hidroliza']},
+'Biologie':{'Celula':['celula','organit','mitocondrie','membrana'],'Genetică':['adn','arn','gena','cromozom','ereditate'],'Țesuturi':['tesut','epitelial','conjunctiv'],'Sistemul nervos':['neuron','sinapsa','nervos'],'Circulație':['inima','sange','artera','vena'],'Respirație':['plaman','alveola','respiratie'],'Digestie':['digestie','stomac','intestin']}
 };
 function guessChapter(text,sub=subject){const t=normalize(text||'');let matches=Object.entries(chapterHints[sub]||{}).map(([name,keys])=>({name,score:keys.reduce((v,k)=>v+(t.includes(normalize(k))?1:0),0)})).sort((a,b)=>b.score-a.score);return matches[0]?.score?matches[0].name:'Neclasificat'}
 function chaptersForSubject(){const map=new Map();for(const d of docs.filter(d=>d.subject===subject)){let name=d.chapter||guessChapter(d.title+' '+(d.text||'').slice(0,2500),subject);if(!map.has(name))map.set(name,{name,docs:0,questions:0});map.get(name).docs++}for(const q of quizzes.filter(q=>q.subject===subject)){let name=q.chapter||'Neclasificat';if(!map.has(name))map.set(name,{name,docs:0,questions:0});map.get(name).questions+=q.questions.length}for(const r of chapterRows.filter(r=>r.subject===subject)){if(!map.has(r.name))map.set(r.name,{name:r.name,docs:0,questions:0})}return [...map.values()].sort((a,b)=>a.name.localeCompare(b.name,'ro'))}
@@ -110,39 +110,39 @@ function renderQuizSession(){let q=quizSession;return `<section class="panel"><h
 async function handleQuiz(action,b){try{if(action==='import'){let file=$('#quizfile').files[0],raw=file?await file.text():$('#quiztext').value;let questions=parseQuiz(raw);if(!questions.length)throw Error('Nu am găsit întrebări valide cu barem. Verifică formatul.');let title=$('#quiztitle').value.trim()||file?.name||'Test grilă',chapter=$('#quizchapter').value.trim()||guessChapter(title+' '+questions.map(q=>q.question).join(' '),subject);await put('quizzes',{id:uid(),subject,title,chapter,questions,created:Date.now()});msg(`${questions.length} întrebări importate. Capitol sugerat: ${chapter}`);reload()}if(action==='start'){quizSession=quizzes.find(q=>q.id===b.dataset.id);render()}if(action==='grade'){if(!quizSession)return;let correct=0,feedback=[];for(let [i,it] of quizSession.questions.entries()){let selected=[...document.querySelectorAll(`[data-answer^="${i}:"]:checked`)].map(x=>Number(x.dataset.answer.split(':')[1])).sort();let answer=[...it.answer].map(Number).sort();let ok=JSON.stringify(selected)===JSON.stringify(answer);correct+=Number(ok);feedback.push(`${i+1}: ${ok?'✓':'×'} (corect: ${answer.map(j=>'ABCDEF'[j]).join(', ')})`)}let q=quizSession;await put('quizAttempts',{id:uid(),subject,title:q.title,chapter:q.chapter,quizId:q.id,correct,total:q.questions.length,date:Date.now()});quizSession=null;await reload();msg(`Rezultat: ${correct}/${q.questions.length}. ${feedback.join(' · ')}`)}}catch(e){msg('Test grilă: '+e.message)}}
 document.addEventListener('click',async e=>{let b=e.target.closest('[data-chapter],[data-quiz]');if(!b)return;if(b.dataset.chapter==='add'){let name=$('#newchapter').value.trim();if(name){await put('chapters',{id:subject+':'+name,subject,name,status:'nou'});reload()}}if(b.dataset.quiz)await handleQuiz(b.dataset.quiz,b)});
 document.addEventListener('change',async e=>{let el=e.target;if(el.dataset.chapterStatus){let name=el.dataset.chapterStatus;await put('chapters',{id:subject+':'+name,subject,name,status:el.value});msg('Progresul capitolului a fost salvat.')}if(el.dataset.docChapter){let d=docs.find(x=>x.id===el.dataset.docChapter);if(d){d.chapter=el.value.trim()||'Neclasificat';await put('docs',d);msg('Capitolul documentului a fost actualizat.')}}});
-
+ 
 // BioChem patch: import direct, PDF mare, teste PDF, editare optionala.
 // Lipeste acest bloc IN ACELASI <script type="module">, chiar inainte de ready.then(reload).
 const pauseImport=()=>new Promise(r=>setTimeout(r,0));
 let importBusy=false;
 async function pdfPages(file,onPage){
- const pdfjs=await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.mjs');
- pdfjs.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.mjs';
- const task=pdfjs.getDocument({data:await file.arrayBuffer()});let pdf,worker=null;
- try{
-  pdf=await task.promise;
-  for(let i=1;i<=pdf.numPages;i++){
-   let page=await pdf.getPage(i),content=await page.getTextContent();
-   // Reconstituieste liniile pentru intrebari si raspunsuri, nu lipeste totul intr-un singur rand.
-   let lines=[],line='',lastY=null;
-   for(const item of content.items){if(typeof item.str!=='string')continue;
-    const y=item.transform?.[5];if(lastY!==null&&typeof y==='number'&&Math.abs(y-lastY)>3){if(line.trim())lines.push(line.trim());line=''}
-    line+=(line?' ':'')+item.str;if(item.hasEOL){lines.push(line.trim());line='';lastY=null}else if(typeof y==='number')lastY=y;
-   }
-   if(line.trim())lines.push(line.trim());let text=lines.join('\n');
-   if(text.trim().length<30){
-    msg(`OCR automat: pagina ${i}/${pdf.numPages} — ${file.name}`);
-    if(!window.Tesseract){await new Promise((ok,no)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';s.onload=ok;s.onerror=no;document.head.append(s)})}
-    if(!worker)worker=await Tesseract.createWorker('ron+eng');
-    const vp=page.getViewport({scale:1.25});const canvas=document.createElement('canvas');
-    canvas.width=Math.ceil(vp.width);canvas.height=Math.ceil(vp.height);
-    try{await page.render({canvasContext:canvas.getContext('2d'),viewport:vp}).promise;text=(await worker.recognize(canvas)).data.text||''}
-    finally{canvas.width=0;canvas.height=0}
-   }
-   await onPage({number:i,text},pdf.numPages);
-   page.cleanup();if(i%3===0)await pauseImport();
+const pdfjs=await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.mjs');
+pdfjs.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.mjs';
+const task=pdfjs.getDocument({data:await file.arrayBuffer()});let pdf,worker=null;
+try{
+ pdf=await task.promise;
+ for(let i=1;i<=pdf.numPages;i++){
+  let page=await pdf.getPage(i),content=await page.getTextContent();
+  // Reconstituieste liniile pentru intrebari si raspunsuri, nu lipeste totul intr-un singur rand.
+  let lines=[],line='',lastY=null;
+  for(const item of content.items){if(typeof item.str!=='string')continue;
+   const y=item.transform?.[5];if(lastY!==null&&typeof y==='number'&&Math.abs(y-lastY)>3){if(line.trim())lines.push(line.trim());line=''}
+   line+=(line?' ':'')+item.str;if(item.hasEOL){lines.push(line.trim());line='';lastY=null}else if(typeof y==='number')lastY=y;
   }
- }finally{if(worker)await worker.terminate();if(pdf)await pdf.destroy();else await task.destroy().catch(()=>{})}
+  if(line.trim())lines.push(line.trim());let text=lines.join('\n');
+  if(text.trim().length<30){
+   msg(`OCR automat: pagina ${i}/${pdf.numPages} — ${file.name}`);
+   if(!window.Tesseract){await new Promise((ok,no)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';s.onload=ok;s.onerror=no;document.head.append(s)})}
+   if(!worker)worker=await Tesseract.createWorker('ron+eng');
+   const vp=page.getViewport({scale:1.25});const canvas=document.createElement('canvas');
+   canvas.width=Math.ceil(vp.width);canvas.height=Math.ceil(vp.height);
+   try{await page.render({canvasContext:canvas.getContext('2d'),viewport:vp}).promise;text=(await worker.recognize(canvas)).data.text||''}
+   finally{canvas.width=0;canvas.height=0}
+  }
+  await onPage({number:i,text},pdf.numPages);
+  page.cleanup();if(i%3===0)await pauseImport();
+ }
+}finally{if(worker)await worker.terminate();if(pdf)await pdf.destroy();else await task.destroy().catch(()=>{})}
 }
 // Elimina complet meniul si etapa obligatorie OCR.
 const oldTabs=tabs.indexOf('Revizuire OCR');if(oldTabs>=0)tabs.splice(oldTabs,1);
@@ -150,77 +150,77 @@ if(tab==='Revizuire OCR')tab='Bibliotecă';
 const oldLibrary=library;
 library=function(){return oldLibrary().replace('PDF-urile sunt citite pagină cu pagină; imaginile sunt transcrise cu OCR local. Scrisul de mână și formulele chimice pot necesita corectare.','Import automat, fără aprobare OCR. PDF-urile mari sunt procesate treptat. Poți corecta textul ulterior, dacă observi o greșeală.')};
 actions.upload=async()=>{
- if(importBusy)return msg('Un import este deja în curs.');
- const input=$('#files'),files=[...input.files],kind=$('#importKind').value,sub=subject;
- if(!files.length)return msg('Alege fișierele.');importBusy=true;
- let succeeded=0,failed=[];
- try{for(const f of files){try{
-  const id=uid(),pages=[];
-  if(f.type==='application/pdf'||/\.pdf$/i.test(f.name)){
-   await pdfPages(f,async(p,total)=>{pages.push(p);msg(`${f.name}: pagina ${p.number}/${total}`)});
-  }else if(f.type.startsWith('image/')){
-   const bitmap=await createImageBitmap(f);const canvas=document.createElement('canvas');
-   const scale=Math.min(1.5,1900/Math.max(bitmap.width,bitmap.height));canvas.width=Math.round(bitmap.width*scale);canvas.height=Math.round(bitmap.height*scale);
-   canvas.getContext('2d').drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close?.();
-   try{pages.push({number:1,text:await ocr(canvas)})}finally{canvas.width=0;canvas.height=0}
-  }else pages.push({number:1,text:await f.text()});
-  await saveAsset(id,f,'document',f.name);
-  const text=pages.map(p=>p.text||'').join('\n');
-  await put('docs',{id,subject:sub,title:f.name,kind,text,pages,sourceAssetId:id,created:Date.now()});
-  succeeded++;msg(`Salvat: ${f.name} (${pages.length} pagini).`);
- }catch(e){failed.push(`${f.name}: ${e.message}`);msg(`Eroare: ${f.name}: ${e.message}`)}}
- }finally{importBusy=false;await reload();msg(`${succeeded} material(e) salvate direct în Bibliotecă.${failed.length?' Erori: '+failed.join(' | '):''}`)}
+if(importBusy)return msg('Un import este deja în curs.');
+const input=$('#files'),files=[...input.files],kind=$('#importKind').value,sub=subject;
+if(!files.length)return msg('Alege fișierele.');importBusy=true;
+let succeeded=0,failed=[];
+try{for(const f of files){try{
+ const id=uid(),pages=[];
+ if(f.type==='application/pdf'||/\.pdf$/i.test(f.name)){
+  await pdfPages(f,async(p,total)=>{pages.push(p);msg(`${f.name}: pagina ${p.number}/${total}`)});
+ }else if(f.type.startsWith('image/')){
+  const bitmap=await createImageBitmap(f);const canvas=document.createElement('canvas');
+  const scale=Math.min(1.5,1900/Math.max(bitmap.width,bitmap.height));canvas.width=Math.round(bitmap.width*scale);canvas.height=Math.round(bitmap.height*scale);
+  canvas.getContext('2d').drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close?.();
+  try{pages.push({number:1,text:await ocr(canvas)})}finally{canvas.width=0;canvas.height=0}
+ }else pages.push({number:1,text:await f.text()});
+ await saveAsset(id,f,'document',f.name);
+ const text=pages.map(p=>p.text||'').join('\n');
+ await put('docs',{id,subject:sub,title:f.name,kind,text,pages,sourceAssetId:id,created:Date.now()});
+ succeeded++;msg(`Salvat: ${f.name} (${pages.length} pagini).`);
+}catch(e){failed.push(`${f.name}: ${e.message}`);msg(`Eroare: ${f.name}: ${e.message}`)}}
+}finally{importBusy=false;await reload();msg(`${succeeded} material(e) salvate direct în Bibliotecă.${failed.length?' Erori: '+failed.join(' | '):''}`)}
 };
 // Importa si teste fara barem. Nu inventeaza raspunsuri corecte.
 const originalParseQuiz=parseQuiz;
 parseQuiz=function(raw){
- try{const parsed=originalParseQuiz(raw);if(parsed.length)return parsed}catch(e){if(raw.trim().startsWith('[')||raw.trim().startsWith('{'))throw e}
- const result=[];let cur=null;
- const flush=()=>{if(cur?.question&&cur.options.length>=2)result.push(cur)};
- for(const src of raw.split(/\r?\n/)){
-  const line=src.trim();if(!line)continue;
-  const q=line.match(/^(?:\d+[.)]\s*|Q\s*:\s*)(.+)$/i),opt=line.match(/^([A-F])[).:]\s*(.+)$/i),ans=line.match(/^(?:R|Răspuns|Raspuns|Answer|Corect)\s*:\s*([A-F](?:\s*[,;+]\s*[A-F])*)\s*$/i);
-  if(q){flush();cur={question:q[1],options:[],answer:[]}}
-  else if(opt&&cur)cur.options.push(opt[2]);
-  else if(ans&&cur)cur.answer=[...new Set(ans[1].match(/[A-F]/gi).map(x=>x.toUpperCase().charCodeAt(0)-65))];
-  else if(cur&&!cur.options.length)cur.question+=' '+line;
- }
- flush();return result.filter(x=>x.answer.every(i=>i>=0&&i<x.options.length));
+try{const parsed=originalParseQuiz(raw);if(parsed.length)return parsed}catch(e){if(raw.trim().startsWith('[')||raw.trim().startsWith('{'))throw e}
+const result=[];let cur=null;
+const flush=()=>{if(cur?.question&&cur.options.length>=2)result.push(cur)};
+for(const src of raw.split(/\r?\n/)){
+ const line=src.trim();if(!line)continue;
+ const q=line.match(/^(?:\d+[.)]\s*|Q\s*:\s*)(.+)$/i),opt=line.match(/^([A-F])[).:]\s*(.+)$/i),ans=line.match(/^(?:R|Răspuns|Raspuns|Answer|Corect)\s*:\s*([A-F](?:\s*[,;+]\s*[A-F])*)\s*$/i);
+ if(q){flush();cur={question:q[1],options:[],answer:[]}}
+ else if(opt&&cur)cur.options.push(opt[2]);
+ else if(ans&&cur)cur.answer=[...new Set(ans[1].match(/[A-F]/gi).map(x=>x.toUpperCase().charCodeAt(0)-65))];
+ else if(cur&&!cur.options.length)cur.question+=' '+line;
+}
+flush();return result.filter(x=>x.answer.every(i=>i>=0&&i<x.options.length));
 };
 const originalQuizView=quizView;
 quizView=function(){return originalQuizView()
- .replace('Acceptă fișier JSON sau text lipit. Pentru PDF/fotografie, treci mai întâi prin Revizuire OCR și copiază textul corectat aici. Baremul este obligatoriu.','Importă PDF, TXT sau JSON direct, fără revizuire obligatorie. Poți edita ulterior întrebările. Dacă nu există barem, răspunsurile rămân neverificate.')
- .replace('Fișier .txt sau .json','Fișier PDF, TXT sau JSON')
- .replace('accept=".txt,.json"','accept=".pdf,.txt,.json,application/pdf"')
- .replace(/(<button class="primary" data-quiz="start" data-id="[^"]+">Exersează<\/button>)/g,'$1')
- .replace(/(<button class="primary" data-quiz="start" data-id="([^"]+)">Exersează<\/button>)/g,'$1 <button class="secondary" data-quiz="edit" data-id="$2">Editează</button>')};
+.replace('Acceptă fișier JSON sau text lipit. Pentru PDF/fotografie, treci mai întâi prin Revizuire OCR și copiază textul corectat aici. Baremul este obligatoriu.','Importă PDF, TXT sau JSON direct, fără revizuire obligatorie. Poți edita ulterior întrebările. Dacă nu există barem, răspunsurile rămân neverificate.')
+.replace('Fișier .txt sau .json','Fișier PDF, TXT sau JSON')
+.replace('accept=".txt,.json"','accept=".pdf,.txt,.json,application/pdf"')
+.replace(/(<button class="primary" data-quiz="start" data-id="[^"]+">Exersează<\/button>)/g,'$1')
+.replace(/(<button class="primary" data-quiz="start" data-id="([^"]+)">Exersează<\/button>)/g,'$1 <button class="secondary" data-quiz="edit" data-id="$2">Editează</button>')};
 const originalHandleQuiz=handleQuiz;
 handleQuiz=async function(action,b){
- if(action==='import'){
-  try{const file=$('#quizfile').files[0],title=$('#quiztitle').value.trim()||file?.name||'Test grilă',sub=subject;
-   let raw=$('#quiztext').value;
-   if(file){if(/\.pdf$/i.test(file.name)||file.type==='application/pdf'){
-    let parts=[];await pdfPages(file,async(p,total)=>{parts.push(p.text);msg(`Extrag testul: ${p.number}/${total}`)});raw=parts.join('\n');
-   }else raw=await file.text()}
-   const questions=parseQuiz(raw);if(!questions.length)throw Error('Nu am identificat întrebări cu variante A–F. PDF-ul a fost citit, dar formatul nu a putut fi transformat automat.');
-   const chapter=$('#quizchapter').value.trim()||guessChapter(title+' '+questions.map(x=>x.question).join(' '),sub);
-   await put('quizzes',{id:uid(),subject:sub,title,chapter,questions,created:Date.now()});await reload();msg(`Test salvat automat: ${questions.length} întrebări. Îl poți edita oricând.`)
-  }catch(e){msg('Import test: '+e.message)}return;
- }
- if(action==='edit'){
-  const q=quizzes.find(x=>x.id===b.dataset.id);if(!q)return;
-  const raw=prompt('Editează întrebările în JSON. answer folosește indici de la 0; [] dacă baremul lipsește.',JSON.stringify(q.questions,null,2));if(raw===null)return;
-  try{const data=JSON.parse(raw);if(!Array.isArray(data)||!data.every(x=>typeof x.question==='string'&&Array.isArray(x.options)&&x.options.length>=2&&Array.isArray(x.answer)&&x.answer.every(a=>Number.isInteger(a)&&a>=0&&a<x.options.length)))throw Error('Format invalid');
-   await put('quizzes',{...q,questions:data});await reload();msg('Test actualizat.')
-  }catch(e){msg('Editare nereușită: '+e.message)}return;
- }
- if(action==='grade'&&quizSession?.questions.some(q=>!q.answer.length)){
-  const missing=quizSession.questions.filter(q=>!q.answer.length).length;
-  return msg(`Acest test are ${missing} întrebări fără barem. Editează răspunsurile corecte înainte de corectarea automată. Răspunsurile tale nu au fost șterse.`)
- }
- return originalHandleQuiz(action,b);
+if(action==='import'){
+ try{const file=$('#quizfile').files[0],title=$('#quiztitle').value.trim()||file?.name||'Test grilă',sub=subject;
+  let raw=$('#quiztext').value;
+  if(file){if(/\.pdf$/i.test(file.name)||file.type==='application/pdf'){
+   let parts=[];await pdfPages(file,async(p,total)=>{parts.push(p.text);msg(`Extrag testul: ${p.number}/${total}`)});raw=parts.join('\n');
+  }else raw=await file.text()}
+  const questions=parseQuiz(raw);if(!questions.length)throw Error('Nu am identificat întrebări cu variante A–F. PDF-ul a fost citit, dar formatul nu a putut fi transformat automat.');
+  const chapter=$('#quizchapter').value.trim()||guessChapter(title+' '+questions.map(x=>x.question).join(' '),sub);
+  await put('quizzes',{id:uid(),subject:sub,title,chapter,questions,created:Date.now()});await reload();msg(`Test salvat automat: ${questions.length} întrebări. Îl poți edita oricând.`)
+ }catch(e){msg('Import test: '+e.message)}return;
+}
+if(action==='edit'){
+ const q=quizzes.find(x=>x.id===b.dataset.id);if(!q)return;
+ const raw=prompt('Editează întrebările în JSON. answer folosește indici de la 0; [] dacă baremul lipsește.',JSON.stringify(q.questions,null,2));if(raw===null)return;
+ try{const data=JSON.parse(raw);if(!Array.isArray(data)||!data.every(x=>typeof x.question==='string'&&Array.isArray(x.options)&&x.options.length>=2&&Array.isArray(x.answer)&&x.answer.every(a=>Number.isInteger(a)&&a>=0&&a<x.options.length)))throw Error('Format invalid');
+  await put('quizzes',{...q,questions:data});await reload();msg('Test actualizat.')
+ }catch(e){msg('Editare nereușită: '+e.message)}return;
+}
+if(action==='grade'&&quizSession?.questions.some(q=>!q.answer.length)){
+ const missing=quizSession.questions.filter(q=>!q.answer.length).length;
+ return msg(`Acest test are ${missing} întrebări fără barem. Editează răspunsurile corecte înainte de corectarea automată. Răspunsurile tale nu au fost șterse.`)
+}
+return originalHandleQuiz(action,b);
 };
-
+ 
 // BioChem: organizare pe pasaje si grile, fara revizuire obligatorie.
 const chapterCatalog={Chimie:{'Alcani':['alcan','metan','etan','propan','butan','pentan','hexan','parafin','substitutie radicalica'],'Alchene':['alchen','etena','propena','dubla legatura','polimerizare'],'Alchine':['alchin','etina','acetilena','tripla legatura'],'Arene':['aren','benzen','toluen','fenil','aromatic','nitrare','sulfonare'],'Alcooli':['alcool','etanol','metanol','hidroxil','butanol'],'Acizi carboxilici':['acid carboxilic','acid acetic','carboxil','esterificare'],'Esteri':['ester','acetat de','hidroliza ester'],'Izomerie':['izomer','chiral','enantiomer','cis trans','izomerie optica'],'Derivați halogenați':['halogen','clorura','bromura','iodura']},Biologie:{'Celula':['celula','mitocondrie','ribozom','membrana celulara'],'Genetică':['adn','arn','cromozom','gene','ereditate'],'Sistem nervos':['sistem nervos','neuron','sinapsa','encefal','maduva spinarii'],'Emisfere cerebrale':['emisfer','cortex cerebral','scoarta cerebrala','lob frontal','lob parietal','lob temporal','lob occipital'],'Circulație':['circulatie','inima','artera','vena','sange'],'Respirație':['respiratie','alveole','plaman','bronhii'],'Digestie':['digestie','stomac','intestin','ficat','pancreas'],'Țesuturi':['tesut','epitelial','conjunctiv']}};
 function scoreChapters(text,sub){const t=normalize(text||'');return Object.entries(chapterCatalog[sub]||{}).map(([name,terms])=>({name,score:terms.reduce((s,term)=>{const needle=normalize(term);return s+(t.includes(needle)?(needle.includes(' ')?3:1):0)},0)})).sort((a,b)=>b.score-a.score)}
@@ -242,6 +242,154 @@ handleQuiz=async function(action,b){if(action==='import'){const titleEl=$('#quiz
 // Classify previously imported questions too, without altering their saved content.
 function quizQuestionChapter(it,q){return it.chapter||chapterOf(it.question+' '+it.options.join(' '),q.subject)}
 document.addEventListener('click',e=>{const b=e.target.closest('[data-topic-search],[data-practice-generate]');if(!b)return;if(b.dataset.topicSearch){const input=$('#topicSearch');if(!input)return;const term=input.value.trim();if(!term)return msg('Scrie un subiect.');query=term;searchResults=allSegments().map(s=>({...s,score:lexical(term,s.text)+((normalize(s.text).includes(normalize(term)))?1:0)})).filter(x=>x.score>0).sort((a,b)=>b.score-a.score).slice(0,100);tab='Căutare';render();msg(`${searchResults.length} pasaje relevante găsite în toate materialele.`)}if(b.dataset.practiceGenerate){const chapter=$('#practiceChapter')?.value||'Toate capitolele',type=$('#practiceType')?.value||'all',count=Number($('#practiceCount')?.value||10);let pool=quizzes.filter(q=>q.subject===subject).flatMap(q=>q.questions.map(it=>({...it,chapter:quizQuestionChapter(it,q),type:it.type||(isProblem(it)?'problem':'theory')}))).filter(it=>(chapter==='Toate capitolele'||it.chapter===chapter)&&(type==='all'||it.type===type));if(!pool.length)return msg('Nu există grile pentru aceste filtre.');pool=pool.sort(()=>Math.random()-.5).slice(0,count);quizSession={id:'generated',subject,title:'Exercițiu · '+chapter,chapter,questions:pool};render();msg(`Test generat: ${pool.length} întrebări.`)}});
-
+ 
+ 
+// Quiz UX v3: editor visual, answer reveal per question, and precise chapter tagging.
+let editingQuizId=null;
+function preciseChapter(it,sub){
+const txt=normalize([it.question,...(it.options||[])].join(' '));
+const has=(words)=>words.some(w=>new RegExp('(^|\\s)'+normalize(w).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'(?=\\s|$)','i').test(txt));
+if(sub==='Chimie'){
+ if(has(['alcool','alcoolul','alcooli','etanol','metanol','propanol','butanol','pentanol','hexanol','hidroxil','hidroxilica','alcoolului']))return 'Alcooli';
+ if(has(['ester','esterificare','esteri','acetat']))return 'Esteri';
+ if(has(['alchena','alchene','etena','propena']))return 'Alchene';
+ if(has(['alchina','alchine','etina','acetilena']))return 'Alchine';
+ if(has(['benzen','arene','toluen','aromatic']))return 'Arene';
+ if(has(['alcan','alcani','metan','etan','propan','butan','pentan','hexan','decan']))return 'Alcani';
+}
+return chapterOf(txt,sub);
+}
+function answerIndices(it){
+return [...new Set((Array.isArray(it.answer)?it.answer:[]).map(Number).filter(n=>Number.isInteger(n)&&n>=0&&n<(it.options||[]).length))].sort((a,b)=>a-b);
+}
+function quizChapterFor(it,q){return it.chapterOverride||it.chapterEdited||preciseChapter(it,q.subject||subject)}
+function quizEditUI(){
+const q=quizzes.find(x=>x.id===editingQuizId);if(!q)return '';
+return `<section class="panel" id="quiz-editor"><h3>Editează testul: ${esc(q.title)}</h3>
+<p class="muted">Modificările se salvează doar când apeși „Salvează”. Poți corecta capitolul, întrebarea, variantele și baremul oricând.</p>
+<label>Titlu</label><input id="qe-title" value="${esc(q.title)}">
+${q.questions.map((it,i)=>`<details class="result" ${i===0?'open':''}><summary><b>${i+1}. ${esc((it.question||'').slice(0,90))}</b> <span class="tag">${esc(quizChapterFor(it,q))}</span></summary>
+<label>Capitolul acestei grile</label><input data-qe-chapter="${i}" value="${esc(it.chapterOverride||it.chapterEdited||quizChapterFor(it,q))}">
+<label>Enunț</label><textarea data-qe-question="${i}">${esc(it.question||'')}</textarea>
+${(it.options||[]).map((opt,j)=>`<label>Varianta ${'ABCDEF'[j]||j+1}</label><textarea data-qe-option="${i}:${j}" style="min-height:65px">${esc(opt)}</textarea>`).join('')}
+<label>Răspuns corect (ex.: B sau A,C; gol dacă nu e cunoscut)</label><input data-qe-answer="${i}" value="${esc(answerIndices(it).map(n=>'ABCDEF'[n]).join(','))}">
+<label>Tipul grilei</label><select data-qe-kind="${i}"><option value="auto">Detectare automată</option><option value="single" ${(it.answerMode==='single')?'selected':''}>Răspuns unic</option><option value="multiple" ${(it.answerMode==='multiple')?'selected':''}>Răspuns multiplu</option></select>
+</details>`).join('')}
+<button class="primary" data-quiz="saveVisualEdit">Salvează modificările</button> <button class="secondary" data-quiz="cancelVisualEdit">Anulează</button></section>`;
+}
+const oldQuizView3=quizView;
+quizView=function(){
+let html=oldQuizView3();
+// Old editor button exists in previous patch; keep it and add visual editor.
+return html+quizEditUI();
+};
+renderQuizSession=function(){
+const q=quizSession;
+return `<section class="panel" id="quiz-session"><h3>${esc(q.title)} · ${esc(q.chapter||'Mai multe capitole')}</h3>
+<p class="muted">Verifică răspunsul după fiecare întrebare. Baremul este afișat numai dacă a fost identificat sau introdus.</p>
+${q.questions.map((it,i)=>{
+const ans=answerIndices(it),mode=it.answerMode==='multiple'||ans.length>1?'multiple':it.answerMode==='single'||ans.length===1?'single':'unknown';
+const inputType=mode==='single'?'radio':'checkbox';
+return `<div class="result"><b>${i+1}. ${esc(it.question||'')}</b>
+<p><span class="tag">${esc(mode==='single'?'Răspuns unic':mode==='multiple'?'Răspuns multiplu':'Tip necunoscut — permite selecție multiplă')}</span>
+<span class="tag">${esc(quizChapterFor(it,{subject:q.subject||subject}))}</span></p>
+${(it.options||[]).map((opt,j)=>`<label style="font-weight:400"><input type="${inputType}" name="quiz-answer-${i}" data-answer="${i}:${j}"> ${'ABCDEF'[j]||j+1}) ${esc(opt)}</label>`).join('')}
+<button class="secondary" data-quiz="revealOne" data-i="${i}">Verifică răspunsul</button>
+<div class="answer hidden" id="quiz-feedback-${i}"></div></div>`;
+}).join('')}
+<button class="primary" data-quiz="grade">Finalizează și salvează rezultatul</button></section>`;
+};
+const oldHandleQuiz3=handleQuiz;
+handleQuiz=async function(action,b){
+try{
+ if(action==='import'){
+  const fileEl=document.getElementById('quizfile'),titleEl=document.getElementById('quiztitle'),chapterEl=document.getElementById('quizchapter'),textEl=document.getElementById('quiztext');
+  if(!fileEl||!titleEl)return msg('Revino la Teste grilă și încearcă din nou.');
+  const file=fileEl.files[0],sub=subject,title=titleEl.value.trim()||file?.name||'Test grilă';
+  try{
+   let raw=textEl?.value||'';
+   if(file){
+    if(/\.pdf$/i.test(file.name)||file.type==='application/pdf'){
+     const parts=[];await pdfPages(file,async(p,total)=>{parts.push(p.text);msg(`Citesc PDF: ${p.number}/${total}`)});
+     raw=parts.join('\n');
+    }else raw=await file.text();
+   }
+   const questions=parseQuiz(raw);
+   if(!questions.length)throw Error('Nu am găsit întrebări complete cu variante. Verifică formatul PDF.');
+   // Read common answer-key formats, only from a clearly labeled key section.
+   const keyStart=raw.search(/(?:^|\n)\s*(?:BAREM(?:UL)?(?:\s+DE\s+(?:CORECTARE|RĂSPUNSURI|RASPUNSURI))?|RĂSPUNSURI\s+CORECTE|RASPUNSURI\s+CORECTE|ANSWER\s+KEY)\s*[:\n]/im);
+   if(keyStart>=0){
+    const key=raw.slice(keyStart);
+    const matches=[...key.matchAll(/(?:^|[\s;,])(\d{1,4})\s*[.):=\-]\s*([A-F](?:\s*[,;+]\s*[A-F])*)\b/gim)];
+    for(const m of matches){
+     const index=Number(m[1])-1;
+     if(index<0||index>=questions.length)continue;
+     const ans=[...new Set((m[2].match(/[A-F]/gi)||[]).map(x=>x.toUpperCase().charCodeAt(0)-65))].filter(n=>n<questions[index].options.length);
+     if(ans.length)questions[index].answer=ans;
+    }
+   }
+   for(const it of questions){it.chapter=preciseChapter(it,sub);it.type=isProblem(it)?'problem':'theory'}
+   const chapter=chapterEl?.value.trim()||'Mai multe capitole';
+   await put('quizzes',{id:uid(),subject:sub,title,chapter,questions,created:Date.now()});
+   await reload();
+   msg(`Importate ${questions.length} grile; ${questions.filter(q=>answerIndices(q).length).length} cu barem detectat. Poți edita ulterior.`);
+  }catch(e){msg('Import test: '+e.message)}
+  return;
+ }
+ if(action==='edit'){
+  editingQuizId=b.dataset.id;quizSession=null;render();
+  document.getElementById('quiz-editor')?.scrollIntoView({block:'start',behavior:'smooth'});return;
+ }
+ if(action==='cancelVisualEdit'){editingQuizId=null;render();return}
+ if(action==='saveVisualEdit'){
+  const q=quizzes.find(x=>x.id===editingQuizId);if(!q)throw Error('Testul nu a fost găsit.');
+  const newQuestions=q.questions.map((it,i)=>{
+   const question=document.querySelector(`[data-qe-question="${i}"]`)?.value.trim();
+   const options=(it.options||[]).map((_,j)=>document.querySelector(`[data-qe-option="${i}:${j}"]`)?.value.trim()||'');
+   const letters=(document.querySelector(`[data-qe-answer="${i}"]`)?.value||'').toUpperCase().match(/[A-F]/g)||[];
+   const answer=[...new Set(letters.map(x=>x.charCodeAt(0)-65))].filter(n=>n<options.length).sort((a,b)=>a-b);
+   const chapterOverride=document.querySelector(`[data-qe-chapter="${i}"]`)?.value.trim()||'Neclasificat';
+   const answerMode=document.querySelector(`[data-qe-kind="${i}"]`)?.value||'auto';
+   if(!question||options.filter(Boolean).length<2)throw Error(`Grila ${i+1}: completează enunțul și cel puțin două variante.`);
+   return {...it,question,options,answer,chapterOverride,answerMode};
+  });
+  await put('quizzes',{...q,title:document.querySelector('#qe-title')?.value.trim()||q.title,questions:newQuestions});
+  editingQuizId=null;await reload();msg('Modificările grilelor și capitolelor au fost salvate.');return;
+ }
+ if(action==='revealOne'){
+  if(!quizSession)return;
+  const i=Number(b.dataset.i),it=quizSession.questions[i],ans=answerIndices(it);
+  const selected=[...document.querySelectorAll(`[data-answer^="${i}:"]:checked`)].map(el=>Number(el.dataset.answer.split(':')[1])).sort((a,b)=>a-b);
+  const box=document.getElementById('quiz-feedback-'+i);if(!box)return;
+  box.classList.remove('hidden');
+  if(!ans.length){box.textContent='Baremul nu a fost identificat în acest PDF. Poți completa răspunsul corect din Editează testul.';return}
+  const correct=selected.length===ans.length&&selected.every((n,j)=>n===ans[j]);
+  box.innerHTML=`<b>${correct?'✓ Corect':'× Incorect'}</b><p>Răspuns corect: ${esc(ans.map(n=>'ABCDEF'[n]).join(', '))}</p><p>${ans.map(n=>esc(it.options[n]||'')).join(' · ')}</p>`;
+  return;
+ }
+ if(action==='grade'){
+  if(!quizSession)return;
+  const q=quizSession;let correct=0,graded=0;
+  for(let i=0;i<q.questions.length;i++){
+   const it=q.questions[i],ans=answerIndices(it);if(!ans.length)continue;
+   graded++;const selected=[...document.querySelectorAll(`[data-answer^="${i}:"]:checked`)].map(el=>Number(el.dataset.answer.split(':')[1])).sort((a,b)=>a-b);
+   if(selected.length===ans.length&&selected.every((n,j)=>n===ans[j]))correct++;
+  }
+  if(!graded)return msg('Nu există barem identificat pentru acest test. Poți exersa, dar nu se poate calcula un scor corect.');
+  await put('quizAttempts',{id:uid(),subject,title:q.title,chapter:q.chapter||'Mai multe capitole',quizId:q.id,correct,total:graded,date:Date.now()});
+  quizSession=null;await reload();msg(`Rezultat: ${correct}/${graded} grile cu barem. ${q.questions.length-graded} fără barem, neincluse în scor.`);return;
+ }
+ if(action==='start'){
+  const q=quizzes.find(x=>x.id===b.dataset.id);if(!q)return;
+  quizSession=q;editingQuizId=null;render();return;
+ }
+ return oldHandleQuiz3(action,b);
+}catch(e){msg('Teste: '+e.message);console.error(e)}
+};
+// Improve chapter assignment of existing imports at runtime without rewriting user edits.
+const oldQuestionChapter=quizQuestionChapter;
+quizQuestionChapter=function(it,q){return quizChapterFor(it,q)};
+ 
 ready.then(async()=>{try{await reload()}catch(e){console.error('Eroare încărcare:',e);$('#status').textContent='Eroare la încărcarea datelor: '+e.message;render()}}).catch(e=>{$('#app').innerHTML='<p class="danger">Browserul nu permite stocarea locală: '+esc(e.message)+'</p>'});
 </script></body></html>
+ 
