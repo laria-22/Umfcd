@@ -103,5 +103,115 @@ async function handleQuiz(action,b){try{if(action==='import'){let file=$('#quizf
 document.addEventListener('click',async e=>{let b=e.target.closest('[data-chapter],[data-quiz]');if(!b)return;if(b.dataset.chapter==='add'){let name=$('#newchapter').value.trim();if(name){await put('chapters',{id:subject+':'+name,subject,name,status:'nou'});reload()}}if(b.dataset.quiz)await handleQuiz(b.dataset.quiz,b)});
 document.addEventListener('change',async e=>{let el=e.target;if(el.dataset.chapterStatus){let name=el.dataset.chapterStatus;await put('chapters',{id:subject+':'+name,subject,name,status:el.value});msg('Progresul capitolului a fost salvat.')}if(el.dataset.docChapter){let d=docs.find(x=>x.id===el.dataset.docChapter);if(d){d.chapter=el.value.trim()||'Neclasificat';await put('docs',d);msg('Capitolul documentului a fost actualizat.')}}});
 
+// BioChem patch: import direct, PDF mare, teste PDF, editare optionala.
+// Lipeste acest bloc IN ACELASI <script type="module">, chiar inainte de ready.then(reload).
+const pauseImport=()=>new Promise(r=>setTimeout(r,0));
+let importBusy=false;
+async function pdfPages(file,onPage){
+ const pdfjs=await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.mjs');
+ pdfjs.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.mjs';
+ const task=pdfjs.getDocument({data:await file.arrayBuffer()});let pdf,worker=null;
+ try{
+  pdf=await task.promise;
+  for(let i=1;i<=pdf.numPages;i++){
+   let page=await pdf.getPage(i),content=await page.getTextContent();
+   // Reconstituieste liniile pentru intrebari si raspunsuri, nu lipeste totul intr-un singur rand.
+   let lines=[],line='',lastY=null;
+   for(const item of content.items){if(typeof item.str!=='string')continue;
+    const y=item.transform?.[5];if(lastY!==null&&typeof y==='number'&&Math.abs(y-lastY)>3){if(line.trim())lines.push(line.trim());line=''}
+    line+=(line?' ':'')+item.str;if(item.hasEOL){lines.push(line.trim());line='';lastY=null}else if(typeof y==='number')lastY=y;
+   }
+   if(line.trim())lines.push(line.trim());let text=lines.join('\n');
+   if(text.trim().length<30){
+    msg(`OCR automat: pagina ${i}/${pdf.numPages} — ${file.name}`);
+    if(!window.Tesseract){await new Promise((ok,no)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';s.onload=ok;s.onerror=no;document.head.append(s)})}
+    if(!worker)worker=await Tesseract.createWorker('ron+eng');
+    const vp=page.getViewport({scale:1.25});const canvas=document.createElement('canvas');
+    canvas.width=Math.ceil(vp.width);canvas.height=Math.ceil(vp.height);
+    try{await page.render({canvasContext:canvas.getContext('2d'),viewport:vp}).promise;text=(await worker.recognize(canvas)).data.text||''}
+    finally{canvas.width=0;canvas.height=0}
+   }
+   await onPage({number:i,text},pdf.numPages);
+   page.cleanup();if(i%3===0)await pauseImport();
+  }
+ }finally{if(worker)await worker.terminate();if(pdf)await pdf.destroy();else await task.destroy().catch(()=>{})}
+}
+// Elimina complet meniul si etapa obligatorie OCR.
+const oldTabs=tabs.indexOf('Revizuire OCR');if(oldTabs>=0)tabs.splice(oldTabs,1);
+if(tab==='Revizuire OCR')tab='Bibliotecă';
+const oldLibrary=library;
+library=function(){return oldLibrary().replace('PDF-urile sunt citite pagină cu pagină; imaginile sunt transcrise cu OCR local. Scrisul de mână și formulele chimice pot necesita corectare.','Import automat, fără aprobare OCR. PDF-urile mari sunt procesate treptat. Poți corecta textul ulterior, dacă observi o greșeală.')};
+actions.upload=async()=>{
+ if(importBusy)return msg('Un import este deja în curs.');
+ const input=$('#files'),files=[...input.files],kind=$('#importKind').value,sub=subject;
+ if(!files.length)return msg('Alege fișierele.');importBusy=true;
+ let succeeded=0,failed=[];
+ try{for(const f of files){try{
+  const id=uid(),pages=[];
+  if(f.type==='application/pdf'||/\.pdf$/i.test(f.name)){
+   await pdfPages(f,async(p,total)=>{pages.push(p);msg(`${f.name}: pagina ${p.number}/${total}`)});
+  }else if(f.type.startsWith('image/')){
+   const bitmap=await createImageBitmap(f);const canvas=document.createElement('canvas');
+   const scale=Math.min(1.5,1900/Math.max(bitmap.width,bitmap.height));canvas.width=Math.round(bitmap.width*scale);canvas.height=Math.round(bitmap.height*scale);
+   canvas.getContext('2d').drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close?.();
+   try{pages.push({number:1,text:await ocr(canvas)})}finally{canvas.width=0;canvas.height=0}
+  }else pages.push({number:1,text:await f.text()});
+  await saveAsset(id,f,'document',f.name);
+  const text=pages.map(p=>p.text||'').join('\n');
+  await put('docs',{id,subject:sub,title:f.name,kind,text,pages,sourceAssetId:id,created:Date.now()});
+  succeeded++;msg(`Salvat: ${f.name} (${pages.length} pagini).`);
+ }catch(e){failed.push(`${f.name}: ${e.message}`);msg(`Eroare: ${f.name}: ${e.message}`)}}
+ }finally{importBusy=false;await reload();msg(`${succeeded} material(e) salvate direct în Bibliotecă.${failed.length?' Erori: '+failed.join(' | '):''}`)}
+};
+// Importa si teste fara barem. Nu inventeaza raspunsuri corecte.
+const originalParseQuiz=parseQuiz;
+parseQuiz=function(raw){
+ try{const parsed=originalParseQuiz(raw);if(parsed.length)return parsed}catch(e){if(raw.trim().startsWith('[')||raw.trim().startsWith('{'))throw e}
+ const result=[];let cur=null;
+ const flush=()=>{if(cur?.question&&cur.options.length>=2)result.push(cur)};
+ for(const src of raw.split(/\r?\n/)){
+  const line=src.trim();if(!line)continue;
+  const q=line.match(/^(?:\d+[.)]\s*|Q\s*:\s*)(.+)$/i),opt=line.match(/^([A-F])[).:]\s*(.+)$/i),ans=line.match(/^(?:R|Răspuns|Raspuns|Answer|Corect)\s*:\s*([A-F](?:\s*[,;+]\s*[A-F])*)\s*$/i);
+  if(q){flush();cur={question:q[1],options:[],answer:[]}}
+  else if(opt&&cur)cur.options.push(opt[2]);
+  else if(ans&&cur)cur.answer=[...new Set(ans[1].match(/[A-F]/gi).map(x=>x.toUpperCase().charCodeAt(0)-65))];
+  else if(cur&&!cur.options.length)cur.question+=' '+line;
+ }
+ flush();return result.filter(x=>x.answer.every(i=>i>=0&&i<x.options.length));
+};
+const originalQuizView=quizView;
+quizView=function(){return originalQuizView()
+ .replace('Acceptă fișier JSON sau text lipit. Pentru PDF/fotografie, treci mai întâi prin Revizuire OCR și copiază textul corectat aici. Baremul este obligatoriu.','Importă PDF, TXT sau JSON direct, fără revizuire obligatorie. Poți edita ulterior întrebările. Dacă nu există barem, răspunsurile rămân neverificate.')
+ .replace('Fișier .txt sau .json','Fișier PDF, TXT sau JSON')
+ .replace('accept=".txt,.json"','accept=".pdf,.txt,.json,application/pdf"')
+ .replace(/(<button class="primary" data-quiz="start" data-id="[^"]+">Exersează<\/button>)/g,'$1')
+ .replace(/(<button class="primary" data-quiz="start" data-id="([^"]+)">Exersează<\/button>)/g,'$1 <button class="secondary" data-quiz="edit" data-id="$2">Editează</button>')};
+const originalHandleQuiz=handleQuiz;
+handleQuiz=async function(action,b){
+ if(action==='import'){
+  try{const file=$('#quizfile').files[0],title=$('#quiztitle').value.trim()||file?.name||'Test grilă',sub=subject;
+   let raw=$('#quiztext').value;
+   if(file){if(/\.pdf$/i.test(file.name)||file.type==='application/pdf'){
+    let parts=[];await pdfPages(file,async(p,total)=>{parts.push(p.text);msg(`Extrag testul: ${p.number}/${total}`)});raw=parts.join('\n');
+   }else raw=await file.text()}
+   const questions=parseQuiz(raw);if(!questions.length)throw Error('Nu am identificat întrebări cu variante A–F. PDF-ul a fost citit, dar formatul nu a putut fi transformat automat.');
+   const chapter=$('#quizchapter').value.trim()||guessChapter(title+' '+questions.map(x=>x.question).join(' '),sub);
+   await put('quizzes',{id:uid(),subject:sub,title,chapter,questions,created:Date.now()});await reload();msg(`Test salvat automat: ${questions.length} întrebări. Îl poți edita oricând.`)
+  }catch(e){msg('Import test: '+e.message)}return;
+ }
+ if(action==='edit'){
+  const q=quizzes.find(x=>x.id===b.dataset.id);if(!q)return;
+  const raw=prompt('Editează întrebările în JSON. answer folosește indici de la 0; [] dacă baremul lipsește.',JSON.stringify(q.questions,null,2));if(raw===null)return;
+  try{const data=JSON.parse(raw);if(!Array.isArray(data)||!data.every(x=>typeof x.question==='string'&&Array.isArray(x.options)&&x.options.length>=2&&Array.isArray(x.answer)&&x.answer.every(a=>Number.isInteger(a)&&a>=0&&a<x.options.length)))throw Error('Format invalid');
+   await put('quizzes',{...q,questions:data});await reload();msg('Test actualizat.')
+  }catch(e){msg('Editare nereușită: '+e.message)}return;
+ }
+ if(action==='grade'&&quizSession?.questions.some(q=>!q.answer.length)){
+  const missing=quizSession.questions.filter(q=>!q.answer.length).length;
+  return msg(`Acest test are ${missing} întrebări fără barem. Editează răspunsurile corecte înainte de corectarea automată. Răspunsurile tale nu au fost șterse.`)
+ }
+ return originalHandleQuiz(action,b);
+};
+
 ready.then(reload).catch(e=>{$('#app').innerHTML='<p class="danger">Browserul nu permite stocarea locală: '+esc(e.message)+'</p>'});
 </script></body></html>
